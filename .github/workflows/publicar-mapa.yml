@@ -1,0 +1,79 @@
+# Publica o Mapa de Antenas no GitHub Pages.
+#
+# Baixa a base do dia da Anatel, roda os testes, gera o mapa e publica como
+# index.html. Roda toda segunda de manha e quando alguem manda pela aba
+# Actions ("Run workflow"). Se o download, os testes ou a conferencia
+# (lidas = no mapa + fora) falharem, nada e publicado e o site continua com
+# a versao anterior.
+#
+# So o mapa vai para o site. A base da Anatel e a planilha nao entram no
+# repositorio nem no Pages. O lote de pontos roda so no navegador de quem usa.
+#
+# Ligar uma vez no GitHub: Settings > Pages > Build and deployment >
+# Source: "GitHub Actions".
+
+name: Publicar mapa no Pages
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # segunda, 06:00 de Brasilia
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Instalar openpyxl
+        run: python -m pip install --quiet openpyxl
+
+      - name: Testes (offline, dados inventados)
+        run: python tests/test_antenas.py
+
+      - name: Baixar a base da Anatel
+        run: python coletar/baixar_anatel.py
+
+      - name: Gerar o mapa
+        run: python ferramentas/gerar.py --sem-planilha --saida _site
+
+      - name: Montar o site
+        run: |
+          mv _site/MapaDeAntenas.html _site/index.html
+          {
+            echo '## Relatorio de geracao'
+            echo '```'
+            cat _site/RELATORIO_GERACAO.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm _site/RELATORIO_GERACAO.txt
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  publicar:
+    needs: gerar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
