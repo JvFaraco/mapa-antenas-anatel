@@ -256,3 +256,9 @@ Actions** e rode o workflow uma vez pela aba Actions.
 > **Ainda não medido.** O download da Anatel nunca rodou fora do Brasil. Se o
 > portal recusar as máquinas do GitHub, o passo 2 falha e nada é publicado. Aí
 > a saída é publicar o HTML gerado no notebook.
+
+## Licença
+
+Código sob a licença [MIT](LICENSE). O Leaflet e as fontes Inter e Montserrat
+embutidos em `ferramentas/vendor/` mantêm as licenças próprias (BSD-2 e OFL).
+Os dados são da Anatel, de acesso público.
