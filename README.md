@@ -9,6 +9,12 @@ A pergunta prática que o mapa responde: *"qual é a antena mais próxima deste
 endereço, de cada operadora, e ela tem 3G?"*. Cole a coordenada de um endereço
 na busca e o painel mostra a mais próxima de cada operadora, com a distância.
 
+**Abrir o mapa online: <https://jvfaraco.github.io/mapa-antenas-anatel/>**
+
+Nada para instalar. O site é refeito toda segunda com a base do dia da Anatel
+(veja [Publicação no GitHub Pages](#publicação-no-github-pages)). Para gerar a
+planilha ou usar sem internet, siga o [Como usar](#como-usar).
+
 > **Dado público.** É a base aberta da Anatel, sem nenhum dado pessoal. O
 > mapa e a planilha podem circular.
 
@@ -30,7 +36,9 @@ O **Mapa de Antenas** foi criado a partir dele e é aprimorado e mantido por
 
 ## Como usar
 
-Duplo clique em **`INICIAR.bat`**:
+Só quer consultar? Abra o [mapa online](https://jvfaraco.github.io/mapa-antenas-anatel/).
+Para gerar o mapa e a planilha no próprio computador (Windows), dê duplo
+clique em **`INICIAR.bat`**:
 
 | Opção | O que faz | Quanto leva |
 |---|---|---|
@@ -230,6 +238,8 @@ sobrescrito.
 
 ## Publicação no GitHub Pages
 
+O site está em **<https://jvfaraco.github.io/mapa-antenas-anatel/>**.
+
 O workflow `.github/workflows/publicar-mapa.yml` monta o mapa no próprio
 GitHub e o publica como `index.html` do Pages. Ele roda toda segunda às 06:00
 (horário de Brasília), quando chega código novo na `main` (`app/`,
@@ -249,14 +259,16 @@ Pelo endereço `https://…github.io`, o mapa base vem do OpenStreetMap oficial,
 como pelo `ABRIR_MAPA.bat`. O lote de pontos continua só no navegador de quem
 usa: o Pages entrega o arquivo e não recebe nada.
 
-**Para ligar, uma vez só:** suba o repositório ao GitHub. Ele precisa ser
-público, porque em repositório privado o Pages exige plano pago. Depois, em
-**Settings > Pages > Build and deployment > Source**, escolha **GitHub
-Actions** e rode o workflow uma vez pela aba Actions.
+**Medido em 10/11/2026.** O portal da Anatel aceita as máquinas do GitHub. A
+primeira execução baixou a base do dia, consolidou 3,3 milhões de linhas em
+**114.459 ERBs**, fechou `lidas = no mapa + fora` sem nenhuma fora e publicou
+tudo em cerca de 1min30s. Se a Anatel um dia passar a recusar, o passo 2 falha
+e nada é publicado. Aí a saída é publicar o HTML gerado no notebook.
 
-> **Ainda não medido.** O download da Anatel nunca rodou fora do Brasil. Se o
-> portal recusar as máquinas do GitHub, o passo 2 falha e nada é publicado. Aí
-> a saída é publicar o HTML gerado no notebook.
+**Num fork, para ligar uma vez só:** o repositório precisa ser público, porque
+em repositório privado o Pages exige plano pago. Depois, em **Settings > Pages >
+Build and deployment > Source**, escolha **GitHub Actions** e rode o workflow
+uma vez pela aba Actions.
 
 ## Licença
 
