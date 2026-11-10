@@ -1,8 +1,9 @@
 # Publica o Mapa de Antenas no GitHub Pages.
 #
 # Baixa a base do dia da Anatel, roda os testes, gera o mapa e publica como
-# index.html. Roda toda segunda de manha e quando alguem manda pela aba
-# Actions ("Run workflow"). Se o download, os testes ou a conferencia
+# index.html. Roda toda segunda de manha, quando chega codigo novo na main
+# (app/, ferramentas/, coletar/ ou este arquivo) e quando alguem manda pela
+# aba Actions ("Run workflow"). Se o download, os testes ou a conferencia
 # (lidas = no mapa + fora) falharem, nada e publicado e o site continua com
 # a versao anterior.
 #
@@ -17,6 +18,9 @@ name: Publicar mapa no Pages
 on:
   schedule:
     - cron: "0 9 * * 1"   # segunda, 06:00 de Brasilia
+  push:
+    branches: [main]
+    paths: ["app/**", "ferramentas/**", "coletar/**", ".github/workflows/publicar-mapa.yml"]
   workflow_dispatch:
 
 permissions:

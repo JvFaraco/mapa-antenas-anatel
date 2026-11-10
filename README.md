@@ -232,8 +232,9 @@ sobrescrito.
 
 O workflow `.github/workflows/publicar-mapa.yml` monta o mapa no próprio
 GitHub e o publica como `index.html` do Pages. Ele roda toda segunda às 06:00
-(horário de Brasília) e também quando alguém clica em **Run workflow** na aba
-Actions. Os passos são estes:
+(horário de Brasília), quando chega código novo na `main` (`app/`,
+`ferramentas/`, `coletar/` ou o próprio workflow) e quando alguém clica em
+**Run workflow** na aba Actions. Os passos são estes:
 
 1. roda os testes (`tests/test_antenas.py`, com dados inventados);
 2. baixa a base do dia da Anatel (`coletar/baixar_anatel.py`);
