@@ -160,6 +160,7 @@ def montar_html(destino, estacoes, info, origem):
         "LEAFLET_JS": lambda: ler("ferramentas/vendor/leaflet.js"),
         "DADOS": lambda: bloco_dados(estacoes, info, origem),
         "GEO_JS": lambda: ler("app/js/geo.js"),
+        "ENDERECO_JS": lambda: ler("app/js/endereco.js"),
         "COBERTURA_JS": lambda: ler("app/js/cobertura.js"),
         "APP_JS": lambda: ler("app/js/app.js"),
     }

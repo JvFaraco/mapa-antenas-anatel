@@ -76,8 +76,8 @@ HTML também funciona, mas o desenho vem de um servidor de reserva bem mais lent
 > `lancador.ps1` escuta só em localhost, recusa pedido de outra máquina e
 > entrega um único arquivo.
 
-Precisa de internet só para o desenho do mapa e para a mancha de cobertura. As
-antenas estão dentro do arquivo.
+Precisa de internet só para o desenho do mapa, para a mancha de cobertura e
+para a busca por CEP ou endereço. As antenas estão dentro do arquivo.
 
 ---
 
@@ -85,7 +85,7 @@ antenas estão dentro do arquivo.
 
 | Quero… | Como |
 |---|---|
-| Antenas perto de um endereço | Cole a coordenada na busca (`-27.5954, -48.5480`), ou clique com o **botão direito** no mapa |
+| Antenas perto de um endereço | Digite o endereço (`Rua Felipe Schmidt, 300, Florianópolis`), o CEP (`88015-200`) ou a coordenada (`-27.5954, -48.5480`), ou clique com o **botão direito** no mapa |
 | Só onde tem 3G (voz) | *Gerações* → deixe só o **3G** marcado |
 | Ir para uma cidade | Digite o município (`Joinville`, ou `Bom Jesus/SC` quando o nome se repete) |
 | Achar uma ERB pelo número | Digite o nº da estação (o mesmo da Anatel) |
@@ -110,6 +110,36 @@ mesmo ponto** (torre compartilhada).
 
 A busca por ponto respeita os filtros: com só o 3G marcado, "a mais próxima da
 TIM" é a mais próxima **com 3G**.
+
+### CEP e endereço
+
+A busca também aceita **CEP** (`88015-200` ou `88015200`) e **endereço escrito**
+(`Rua XV de Novembro, Joinville`). Para isso o mapa precisa perguntar a dois
+serviços gratuitos e sem chave:
+
+- o **CEP** vai ao [ViaCEP](https://viacep.com.br), que devolve a rua, o bairro e
+  o município. A rua é então procurada no OpenStreetMap;
+- o **endereço** vai ao [Nominatim](https://nominatim.openstreetmap.org), o
+  buscador do OpenStreetMap. Quando mais de um lugar bate (a mesma rua em
+  bairros diferentes, por exemplo), aparece uma lista para escolher.
+
+Limites que valem saber:
+
+- **A posição é da rua, não do número.** O OpenStreetMap tem poucos números de
+  casa no Brasil, e o CEP aponta para a rua (ou o trecho dela). O mapa diz a
+  precisão de cada resultado: no número, pela rua, pelo bairro ou pelo centro
+  do município. Para a antena mais próxima "na porta", use a coordenada.
+- **Isto sai do navegador.** O texto do CEP ou do endereço vai para esses
+  serviços, e só quando você clica em Buscar. Coordenada, município e número de
+  ERB continuam sem sair. O link da vista guarda só a coordenada achada.
+- **O lote não usa isto.** O lote de pontos continua só com coordenadas: mandar
+  uma carteira de endereços para fora vazaria dado de cliente, e a política do
+  Nominatim proíbe uso em lote.
+- Os dois serviços são de terceiros. Se um deles estiver fora do ar, a busca
+  diz isso e sugere colar a coordenada.
+
+Número de 8 dígitos sem hífen é CEP quando não existe ERB com esse número.
+Nenhuma ERB da base tem 8 dígitos.
 
 ### Lote de pontos
 
@@ -220,12 +250,15 @@ ferramentas/gerar.py        orquestra: consolida, monta o HTML, a planilha e o r
 app/modelo.html             a casca + todo o CSS (paleta propria; escuro e o padrao)
 app/js/app.js               o aplicativo (canvas, filtros, busca, ficha, resumo, animacoes)
 app/js/cobertura.js         a mancha das operadoras (veio do mapa original, igual)
+app/js/endereco.js          busca por CEP (ViaCEP) e endereço (Nominatim), com a precisão
+                            de cada resultado (10/11/2026)
 app/js/geo.js               distâncias e janela de busca (do mapa original) + índice em
                             grade e leitura do lote (10/11/2026)
 ferramentas/vendor/         Leaflet e as fontes Inter/Montserrat (OFL) embutidos (sem npm, sem CDN)
 lancador.ps1                servidor local mínimo (só localhost, um arquivo)
 tests/test_antenas.py       regras, geração de ponta a ponta e download cortado, com dados inventados
-tests/geo_test.cjs          índice em grade e leitura do lote (Node; o test_antenas.py roda se houver Node)
+tests/geo_test.cjs          índice em grade, leitura do lote e busca por CEP/endereço sem rede
+                            (Node; o test_antenas.py roda se houver Node)
 .github/workflows/          publicar-mapa.yml: gera e publica o mapa no GitHub Pages
 ```
 

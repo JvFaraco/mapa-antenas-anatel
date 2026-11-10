@@ -121,5 +121,158 @@ caso('mancha: so a Claro trata tile ausente como falha', () => {
   assert.deepStrictEqual(marcadas, ['claro']);
 });
 
-if (falhas) { console.log(falhas + ' falha(s)'); process.exit(1); }
-console.log('todos ok');
+// ------------------------------------------------ CEP e endereco (endereco.js)
+// Sem rede: um fetch falso responde pelo ViaCEP e pelo Nominatim e guarda os
+// pedidos, para conferir o que sairia do navegador.
+const Endereco = require(path.join(__dirname, '..', 'app', 'js', 'endereco.js'));
+
+let filaAsync = Promise.resolve();
+function casoAsync(nome, fn) {
+  filaAsync = filaAsync.then(fn).then(
+    () => console.log('ok   ' + nome),
+    (e) => { falhas++; console.log('FALHA ' + nome + '\n      ' + e.message); });
+}
+
+function nominatimItem(o) {
+  return Object.assign({ lat: '-27.59', lon: '-48.55', place_rank: 26, display_name: 'x' }, o);
+}
+const RUA_FLORIPA = { road: 'Avenida Rio Branco', suburb: 'Centro', city: 'Florianópolis', 'ISO3166-2-lvl4': 'BR-SC' };
+
+function fetchFalso(rotas) {
+  const pedidos = [];
+  const fn = async (url) => {
+    pedidos.push(url);
+    for (const [teste, corpo] of rotas) {
+      if (teste(url)) {
+        if (corpo instanceof Error) throw corpo;
+        return { ok: true, status: 200, json: async () => corpo };
+      }
+    }
+    return { ok: true, status: 200, json: async () => [] };
+  };
+  return { fn, pedidos };
+}
+function geocod(rotas, extra) {
+  const f = fetchFalso(rotas);
+  const esperas = [];
+  let relogio = 0;
+  const g = Endereco.criar(Object.assign({
+    fetch: f.fn, dentroDoBrasil: Geo.dentroDoBrasil,
+    agora: () => relogio, esperar: async (ms) => { esperas.push(ms); relogio += ms; }
+  }, extra));
+  return { g, pedidos: f.pedidos, esperas };
+}
+const VIACEP_FLORIPA = {
+  cep: '88015-200', logradouro: 'Avenida Rio Branco', bairro: 'Centro',
+  localidade: 'Florianópolis', uf: 'SC', estado: 'Santa Catarina'
+};
+
+caso('endereco: CEP com e sem hifen; o resto nao e CEP', () => {
+  assert.strictEqual(Endereco.lerCep('88015-200'), '88015200');
+  assert.strictEqual(Endereco.lerCep(' 88015200 '), '88015200');
+  for (const t of ['8801520', '880152000', '88015-20', 'cep 88015-200', '-27.59, -48.55']) {
+    assert.strictEqual(Endereco.lerCep(t), null, t);
+  }
+});
+
+caso('endereco: cara de endereco x nome de municipio', () => {
+  for (const t of ['Rua Felipe Schmidt 300', 'Av. Brasil', 'avenida paulista', 'Centro, Joinville', 'Praça XV']) {
+    assert.ok(Endereco.pareceEndereco(t), t);
+  }
+  for (const t of ['Joinville', 'Bom Jesus/SC', 'São José', 'Ruapuana']) {
+    assert.ok(!Endereco.pareceEndereco(t), t);
+  }
+});
+
+caso('endereco: precisao pelo place_rank do Nominatim', () => {
+  assert.strictEqual(Endereco.precisaoDe({ place_rank: 30 }), 'imovel');
+  assert.strictEqual(Endereco.precisaoDe({ place_rank: 26 }), 'rua');
+  assert.strictEqual(Endereco.precisaoDe({ place_rank: 20 }), 'bairro');
+  assert.strictEqual(Endereco.precisaoDe({ place_rank: 16 }), 'cidade');
+  assert.strictEqual(Endereco.precisaoDe({}), 'cidade');
+});
+
+caso('endereco: rotulo curto com UF', () => {
+  assert.strictEqual(Endereco.rotuloDe({ address: Object.assign({ house_number: '300' }, RUA_FLORIPA) }),
+    'Avenida Rio Branco, 300, Centro, Florianópolis/SC');
+  assert.strictEqual(Endereco.rotuloDe({ display_name: 'só isto' }), 'só isto');
+});
+
+casoAsync('endereco: trechos da mesma rua viram um resultado so', async () => {
+  const { g, pedidos } = geocod([[(u) => u.includes('nominatim'), [
+    nominatimItem({ address: RUA_FLORIPA }),
+    nominatimItem({ lat: '-27.6', address: RUA_FLORIPA }),
+    nominatimItem({ address: Object.assign({}, RUA_FLORIPA, { city: 'Joinville' }) })
+  ]]]);
+  const r = await g.buscarTexto('Avenida Rio Branco');
+  assert.strictEqual(r.length, 2);
+  assert.strictEqual(r[0].lat, -27.59);
+  const u = new URL(pedidos[0]);
+  assert.strictEqual(u.searchParams.get('countrycodes'), 'br');
+  assert.strictEqual(u.searchParams.get('q'), 'Avenida Rio Branco');
+});
+
+casoAsync('endereco: resultado fora do Brasil e descartado', async () => {
+  const { g } = geocod([[(u) => u.includes('nominatim'), [nominatimItem({ lat: '40.7', lon: '-74.0' })]]]);
+  assert.deepStrictEqual(await g.buscarTexto('Broadway'), []);
+});
+
+casoAsync('endereco: CEP acha a rua e nunca diz "no numero"', async () => {
+  const { g, pedidos } = geocod([
+    [(u) => u.includes('viacep.com.br/ws/88015200/json/'), VIACEP_FLORIPA],
+    [(u) => u.includes('street='), [nominatimItem({ place_rank: 30, address: RUA_FLORIPA })]]
+  ]);
+  const r = await g.buscarCep('88015-200');
+  assert.strictEqual(r.precisao, 'rua');
+  assert.strictEqual(r.rotulo, 'Avenida Rio Branco, Centro, Florianópolis/SC (CEP 88015-200)');
+  const u = new URL(pedidos[1]);
+  assert.strictEqual(u.searchParams.get('street'), 'Avenida Rio Branco');
+  assert.strictEqual(u.searchParams.get('city'), 'Florianópolis');
+  assert.strictEqual(u.searchParams.get('state'), 'Santa Catarina');
+});
+
+casoAsync('endereco: rua achada em outra cidade nao vale; cai para o bairro', async () => {
+  const { g } = geocod([
+    [(u) => u.includes('viacep'), VIACEP_FLORIPA],
+    [(u) => u.includes('street='), [nominatimItem({ address: Object.assign({}, RUA_FLORIPA, { city: 'Joinville' }) })]],
+    [(u) => u.includes('q=Centro'), [nominatimItem({ place_rank: 20, lat: '-27.596', address: { suburb: 'Centro', city: 'Florianópolis' } })]]
+  ]);
+  const r = await g.buscarCep('88015200');
+  assert.strictEqual(r.precisao, 'bairro');
+  assert.strictEqual(r.lat, -27.596);
+});
+
+casoAsync('endereco: CEP de cidade inteira (sem rua) vai ao centro do municipio', async () => {
+  const { g } = geocod([
+    [(u) => u.includes('viacep'), { cep: '89990-000', logradouro: '', bairro: '', localidade: 'Ipuaçu', uf: 'SC', estado: 'Santa Catarina' }],
+    [(u) => u.includes('city=Ipua'), [nominatimItem({ place_rank: 16, lat: '-26.63', lon: '-52.45', address: { town: 'Ipuaçu' } })]]
+  ]);
+  const r = await g.buscarCep('89990000');
+  assert.strictEqual(r.precisao, 'cidade');
+  assert.strictEqual(r.rotulo, 'Ipuaçu/SC (CEP 89990-000)');
+});
+
+casoAsync('endereco: CEP inexistente da erro de CEP, sem chamar o Nominatim', async () => {
+  const { g, pedidos } = geocod([[(u) => u.includes('viacep'), { erro: 'true' }]]);
+  await assert.rejects(g.buscarCep('99999999'), (e) => e.tipo === 'cep' && e.message.includes('99999-999'));
+  assert.strictEqual(pedidos.length, 1);
+});
+
+casoAsync('endereco: falha de rede vira erro "rede", nao excecao crua', async () => {
+  const { g } = geocod([[() => true, new TypeError('Failed to fetch')]]);
+  await assert.rejects(g.buscarTexto('Rua X, Joinville'), (e) => e.tipo === 'rede' && e.message.includes('nominatim'));
+});
+
+casoAsync('endereco: no maximo 1 pedido por segundo ao Nominatim', async () => {
+  const { g, esperas } = geocod([]);
+  await g.buscarTexto('a 1');
+  await g.buscarTexto('b 2');
+  await g.buscarTexto('c 3');
+  assert.strictEqual(esperas.length, 2);
+  assert.ok(esperas.every((ms) => ms >= 1000), String(esperas));
+});
+
+filaAsync.then(() => {
+  if (falhas) { console.log(falhas + ' falha(s)'); process.exit(1); }
+  console.log('todos ok');
+});

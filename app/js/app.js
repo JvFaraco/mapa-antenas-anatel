@@ -861,9 +861,19 @@
     el.className = 'msg' + (tipo ? ' ' + tipo : '');
   }
 
+  // CEP e endereco vao para fora (ViaCEP e Nominatim, ver app/js/endereco.js);
+  // coordenada, numero da ERB e municipio nunca saem do navegador.
+  var geocodificador = window.Endereco && window.fetch
+    ? Endereco.criar({ fetch: window.fetch.bind(window) })
+    : null;
+  // Cada busca ganha um numero: resposta de uma busca antiga que chega depois
+  // de uma nova e descartada, em vez de voar para o lugar errado.
+  var buscaAtual = 0;
+
   function executarBusca() {
     var t = $('#entrada').value.trim();
     var lista = $('#lista');
+    var minha = ++buscaAtual;
     aviso('');
     lista.hidden = true;
     if (!t) return;
@@ -881,17 +891,93 @@
       return;
     }
 
+    // "88015-200" e sempre CEP. Oito digitos sem hifen sao CEP se nao houver
+    // ERB com esse numero (na base de 16/10/2026 nenhuma tem 8 digitos).
+    var cep = window.Endereco ? Endereco.lerCep(t) : null;
+    if (cep && /-/.test(t)) { buscarCep(cep, minha); return; }
+
     if (/^\d+$/.test(t)) {
       for (var i = 0; i < D.n; i++) {
         if (D.numero[i] === t) { irPara(i); return; }
       }
+      if (cep) { buscarCep(cep, minha); return; }
       aviso('Nenhuma ERB com o numero ' + t + '.', 'erro');
       return;
     }
 
-    buscarMunicipio(t);
+    // "Joinville" e municipio (sem rede). "Rua X, 300, Joinville" tem cara de
+    // endereco e vai direto ao Nominatim. O que nao bate com municipio nenhum
+    // tambem tenta como endereco antes de dar erro.
+    var temCaraDeEndereco = window.Endereco ? Endereco.pareceEndereco(t) : false;
+    if (!temCaraDeEndereco && buscarMunicipio(t)) return;
+    if (!window.Endereco) { aviso('Nao achei municipio com "' + t + '".', 'erro'); return; }
+    buscarEnderecoTexto(t, minha);
   }
 
+  function semGeocodificador() {
+    aviso('Este navegador nao consegue consultar CEP nem endereco. Cole a coordenada do lugar.', 'erro');
+  }
+
+  function falhaGeocodificacao(e) {
+    if (e && e.tipo === 'rede') {
+      aviso('Nao consegui consultar o endereco agora (' + e.message + ') Tente de novo em instantes, ' +
+        'ou cole a coordenada do lugar.', 'erro');
+    } else {
+      aviso((e && e.message) || 'Falha ao consultar o endereco.', 'erro');
+    }
+  }
+
+  function irParaEndereco(r) {
+    buscarPerto(r.lat, r.lon, true, { rotulo: r.rotulo, precisao: r.precisao });
+    // O endereco achado ja aparece no quadro "Antenas perto do ponto"; aqui
+    // fica so a precisao, que e o que muda a confianca na resposta.
+    aviso('Endereco encontrado. Posicao ' + Endereco.TEXTO_PRECISAO[r.precisao] + '.',
+      r.precisao === 'imovel' || r.precisao === 'rua' ? 'ok' : '');
+  }
+
+  function buscarCep(cep, minha) {
+    if (!geocodificador) { semGeocodificador(); return; }
+    aviso('Procurando o CEP ' + Endereco.formatarCep(cep) + '...');
+    geocodificador.buscarCep(cep).then(function (r) {
+      if (minha !== buscaAtual) return;
+      irParaEndereco(r);
+    }, function (e) {
+      if (minha !== buscaAtual) return;
+      falhaGeocodificacao(e);
+    });
+  }
+
+  function buscarEnderecoTexto(t, minha) {
+    if (!geocodificador) { semGeocodificador(); return; }
+    aviso('Procurando o endereco...');
+    geocodificador.buscarTexto(t).then(function (achados) {
+      if (minha !== buscaAtual) return;
+      if (!achados.length) {
+        aviso('Nao achei municipio nem endereco com "' + t + '". Confira a grafia, ' +
+          'acrescente o municipio ("Rua X, Joinville") ou cole a coordenada.', 'erro');
+        return;
+      }
+      if (achados.length === 1) { irParaEndereco(achados[0]); return; }
+      // Varios: lista para escolher, como nos municipios repetidos.
+      var h = '<div class="lista-titulo">' + achados.length + ' lugares batem:</div>';
+      achados.forEach(function (r, k) {
+        h += '<button class="item-lista" data-end="' + k + '"><strong>' + esc(r.rotulo) +
+          '</strong><span class="sub">' + esc(Endereco.TEXTO_PRECISAO_CURTO[r.precisao]) + '</span></button>';
+      });
+      var lista = $('#lista');
+      lista.innerHTML = h;
+      lista.hidden = false;
+      aviso('');
+      lista.querySelectorAll('[data-end]').forEach(function (b) {
+        b.addEventListener('click', function () { lista.hidden = true; irParaEndereco(achados[+b.dataset.end]); });
+      });
+    }, function (e) {
+      if (minha !== buscaAtual) return;
+      falhaGeocodificacao(e);
+    });
+  }
+
+  // Devolve true quando achou municipio (e ja tratou), false quando nada bateu.
   function buscarMunicipio(t) {
     var alvo = normalizar(t);
     var uf = '';
@@ -906,11 +992,8 @@
       else if (nome.indexOf(alvo) >= 0) parciais.push(k);
     });
     var achados = exatos.length ? exatos : parciais;
-    if (!achados.length) {
-      aviso('Nao achei municipio com "' + t + '".', 'erro');
-      return;
-    }
-    if (achados.length === 1) { irParaMunicipio(achados[0]); return; }
+    if (!achados.length) return false;
+    if (achados.length === 1) { irParaMunicipio(achados[0]); return true; }
 
     // Varios (ex.: "Bom Jesus" existe em 5 UFs): lista para escolher em vez
     // de voar para o errado com confianca.
@@ -928,6 +1011,7 @@
     lista.querySelectorAll('[data-mun]').forEach(function (b) {
       b.addEventListener('click', function () { lista.hidden = true; irParaMunicipio(+b.dataset.mun); });
     });
+    return true;
   }
 
   function irParaMunicipio(k) {
@@ -946,8 +1030,10 @@
 
   // ------------------------------------------- 8. ANTENAS PERTO DE UM PONTO
 
-  function buscarPerto(lat, lon, centralizar) {
-    estado.ponto = { lat: lat, lon: lon };
+  // `origem` ({rotulo, precisao}) so vem da busca por CEP/endereco. Fica na
+  // memoria para o cabecalho; o link da vista leva so a coordenada.
+  function buscarPerto(lat, lon, centralizar, origem) {
+    estado.ponto = { lat: lat, lon: lon, rotulo: origem && origem.rotulo, precisao: origem && origem.precisao };
     if (marcadorPonto) mapa.removeLayer(marcadorPonto);
     marcadorPonto = L.marker([lat, lon], {
       icon: L.divIcon({ className: '', html: '<div class="alvo-busca"><span class="radar"></span></div>', iconSize: [0, 0] }),
@@ -1007,7 +1093,11 @@
     var noRaio = res.noRaio;
     var melhorOp = res.melhorOp;
 
-    $('#perto-cabeca').innerHTML = 'Ponto <code>' + P.lat.toFixed(5) + ', ' + P.lon.toFixed(5) + '</code>';
+    var coordP = '<code>' + P.lat.toFixed(5) + ', ' + P.lon.toFixed(5) + '</code>';
+    $('#perto-cabeca').innerHTML = P.rotulo
+      ? '<strong>' + esc(P.rotulo) + '</strong><br>' + coordP +
+        ' <span class="sub">posicao ' + esc(Endereco.TEXTO_PRECISAO[P.precisao] || '') + '</span>'
+      : 'Ponto ' + coordP;
 
     var h = '';
     for (var k = 0; k < ANT_OPERADORAS.length; k++) {
@@ -1446,6 +1536,7 @@
     $('#buscar').addEventListener('click', executarBusca);
     $('#entrada').addEventListener('keydown', function (e) { if (e.key === 'Enter') executarBusca(); });
     $('#limpar').addEventListener('click', function () {
+      buscaAtual++; // resposta de CEP/endereco ainda a caminho e descartada
       $('#entrada').value = '';
       aviso('');
       $('#lista').hidden = true;
