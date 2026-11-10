@@ -663,6 +663,7 @@
     if (!estado.cobertura) { $('#cobertura-legenda').innerHTML = ''; return; }
     try {
       camadaCobertura = Cobertura.criar(estado.cobertura, estado.coberturaCamada, { opacity: estado.opacidade });
+      vigiarFalhaDaMancha(camadaCobertura, Cobertura.fonte(estado.cobertura));
       camadaCobertura.addTo(mapa);
       // A mancha entra ABAIXO das antenas: ela e o fundo que explica o ponto.
       if (camadaCobertura.setZIndex) camadaCobertura.setZIndex(200);
@@ -684,7 +685,22 @@
         esc(itens[i].cor) + '"></span>' + esc(itens[i].rotulo) + '</div>';
     }
     if (f.modelo) h += '<div class="nota">' + esc(f.modelo) + '</div>';
+    h += '<div class="msg erro" id="cobertura-falha" role="status"></div>';
     $('#cobertura-legenda').innerHTML = h;
+  }
+
+  // Sem isto, servidor da operadora fora do ar era so uma mancha vazia, igual
+  // a "sem cobertura" (10/11/2026: a TIM respondia 503 a tudo). Conta os tiles
+  // de cada carregamento e, no fim dele, pergunta ao diagnosticoDaVista.
+  function vigiarFalhaDaMancha(camada, f) {
+    var chegaram = 0, falharam = 0;
+    camada.on('loading', function () { chegaram = 0; falharam = 0; });
+    camada.on('manchatile', function (e) { if (e.ok) chegaram++; else falharam++; });
+    camada.on('load', function () {
+      if (camada !== camadaCobertura) return;   // trocada no meio do caminho
+      var caixa = $('#cobertura-falha');
+      if (caixa) caixa.textContent = Cobertura.diagnosticoDaVista(f, chegaram, falharam);
+    });
   }
 
   // ---------------------------------------------------------- 6. A FICHA

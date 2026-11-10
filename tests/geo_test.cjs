@@ -1,12 +1,14 @@
-// Testes do app/js/geo.js (indice em grade e leitura do lote), sem rede e
-// sem navegador. Rodado pelo tests/test_antenas.py quando o Node existe na
-// maquina; sem Node, aquele teste e pulado (o projeto nao depende do Node).
+// Testes do app/js/geo.js (indice em grade e leitura do lote) e do aviso de
+// mancha que nao chegou (app/js/cobertura.js), sem rede e sem navegador.
+// Rodado pelo tests/test_antenas.py quando o Node existe na maquina; sem
+// Node, aquele teste e pulado (o projeto nao depende do Node).
 //
 //     node tests/geo_test.cjs
 'use strict';
 const assert = require('assert');
 const path = require('path');
 const Geo = require(path.join(__dirname, '..', 'app', 'js', 'geo.js'));
+const Cobertura = require(path.join(__dirname, '..', 'app', 'js', 'cobertura.js'));
 
 let falhas = 0;
 function caso(nome, fn) {
@@ -84,6 +86,39 @@ caso('lote: limite de pontos nao some com o excedente', () => {
 caso('lote: Noronha entra (leste ate -28, como no consolidar.py)', () => {
   const r = Geo.lerLote('-3.85, -32.42');
   assert.strictEqual(r.pontos.length, 1);
+});
+
+// ------------------------------------------------ aviso de mancha ausente
+const N = Cobertura.FALHAS_PARA_AVISAR;
+const tim = Cobertura.fonte('tim');
+const vivo = Cobertura.fonte('vivo');
+const claro = Cobertura.fonte('claro');
+
+caso('mancha: um tile que chegou cala o aviso', () => {
+  assert.strictEqual(Cobertura.diagnosticoDaVista(tim, 1, 30), '');
+});
+
+caso('mancha: poucas falhas (borda, zoom de transicao) nao avisam', () => {
+  assert.strictEqual(Cobertura.diagnosticoDaVista(tim, 0, N - 1), '');
+});
+
+caso('mancha: TIM e Vivo sem nenhum tile = servidor fora do ar', () => {
+  for (const f of [tim, vivo]) {
+    const msg = Cobertura.diagnosticoDaVista(f, 0, N);
+    assert.ok(msg.includes('servidor da ' + f.nome) && msg.includes('fora do ar'), msg);
+    assert.ok(!msg.includes('nao ha cobertura'), msg);
+  }
+});
+
+caso('mancha: na Claro o aviso tambem admite "sem cobertura aqui"', () => {
+  assert.strictEqual(claro.ausenteFalha, true);
+  const msg = Cobertura.diagnosticoDaVista(claro, 0, 20);
+  assert.ok(msg.includes('nao ha cobertura aqui') && msg.includes('fora do ar'), msg);
+});
+
+caso('mancha: so a Claro trata tile ausente como falha', () => {
+  const marcadas = Cobertura.FONTES.filter((f) => f.ausenteFalha).map((f) => f.id);
+  assert.deepStrictEqual(marcadas, ['claro']);
 });
 
 if (falhas) { console.log(falhas + ' falha(s)'); process.exit(1); }

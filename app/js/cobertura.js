@@ -192,6 +192,9 @@
       id: 'claro',
       nome: 'Claro',
       tipo: 'arcgis-tile',
+      // Onde nao ha cobertura o tile da Claro volta com erro (500). Por isso,
+      // na Claro, nenhum tile na vista nao prova que o servidor caiu.
+      ausenteFalha: true,
       servidor: 'https://cobertura.claro.com.br/arcgis/mapserver',
       atribuicao: 'Cobertura &copy; Claro',
       // Tile cacheado (singleFusedMapCache), zoom 0 a 23, EPSG:3857. E o mais
@@ -410,8 +413,17 @@
       // TILE AUSENTE NAO E FALHA: onde nao ha cobertura o servidor recusa a
       // imagem (a Claro devolve 500 com um JSON dentro). O canvas simplesmente
       // fica transparente, que e o que aquilo significa - sem cobertura ali.
-      mancha.onload = function () { manchaChegou = true; passo(); };
-      mancha.onerror = function () { passo(); };
+      // Cada tile ainda conta se chegou ou nao ('manchatile'): quem decide se
+      // a vista inteira falhou e o diagnosticoDaVista, olhando o conjunto.
+      mancha.onload = function () {
+        manchaChegou = true;
+        self.fire('manchatile', { ok: true });
+        passo();
+      };
+      mancha.onerror = function () {
+        self.fire('manchatile', { ok: false });
+        passo();
+      };
 
       if (molde) {
         base = new Image();
@@ -547,6 +559,29 @@
     }
   };
 
+  // A VISTA INTEIRA FALHOU? Recebe quantos tiles da mancha chegaram e quantos
+  // falharam num carregamento (do 'loading' ao 'load' da camada) e devolve o
+  // aviso para a legenda, ou '' quando nao ha o que avisar.
+  //
+  // Um tile que chegou basta para calar o aviso. Poucas falhas tambem nao
+  // avisam: na borda do mapa ou num zoom de transicao sobra um ou outro tile.
+  // TIM e Vivo devolvem imagem transparente onde nao ha cobertura, entao
+  // nenhum tile = servidor fora. Na Claro (ausenteFalha) a falha tambem e o
+  // jeito normal de dizer "sem cobertura aqui", e o aviso diz as duas coisas.
+  // Medido em 10/11/2026: tim.img.com.br respondia 503 a qualquer pedido.
+  var FALHAS_PARA_AVISAR = 4;
+
+  function diagnosticoDaVista(f, chegaram, falharam) {
+    if (!f || chegaram > 0 || falharam < FALHAS_PARA_AVISAR) return '';
+    if (f.ausenteFalha) {
+      return 'Nenhuma parte da mancha da ' + f.nome + ' chegou nesta vista. Ou nao ' +
+        'ha cobertura aqui, ou o servidor da ' + f.nome + ' esta fora do ar agora.';
+    }
+    return 'O servidor da ' + f.nome + ' nao respondeu: nenhuma parte da mancha ' +
+      'chegou. Deve estar fora do ar agora; tente de novo mais tarde. As antenas ' +
+      'nao dependem disso.';
+  }
+
   function criar(idFonte, idCamada, opcoes) {
     var f = fonte(idFonte);
     if (!f) throw new Error('operadora desconhecida: ' + idFonte);
@@ -573,6 +608,8 @@
     camadaDe: camadaDe,
     camadaPadrao: camadaPadrao,
     legenda: legenda,
+    FALHAS_PARA_AVISAR: FALHAS_PARA_AVISAR,
+    diagnosticoDaVista: diagnosticoDaVista,
     criar: criar
   };
 
