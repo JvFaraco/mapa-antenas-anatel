@@ -452,6 +452,9 @@ select.campo option { background: var(--card); color: var(--text); }
 .proximas tr:nth-child(4) { animation-delay: 120ms; }
 .proximas tr:nth-child(n+5) { animation-delay: 160ms; }
 .proximas tr:last-child td { border-bottom: none; }
+/* Arrastando o pino ou o raio, a tabela e refeita a cada quadro: sem isto as
+   linhas reiniciariam a entrada (opacidade 0) e sumiriam durante o gesto. */
+.sem-animacao .proximas tr, .sem-animacao .lista .item-lista { animation: none; }
 .proximas td.num { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--cor-ciano); }
 .proximas tr:hover td { background: var(--blue-dim); }
 .proximas tr:hover td:first-child { border-radius: 8px 0 0 8px; box-shadow: inset 3px 0 0 var(--cor-ciano); }

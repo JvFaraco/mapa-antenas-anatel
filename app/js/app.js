@@ -1090,7 +1090,7 @@
     var agendado = false;
     function quadro() {
       agendado = false;
-      if (estado.ponto) renderizarPerto();
+      if (estado.ponto) renderizarPerto(true);
     }
     // Clique no proprio pino nao chega ao mapa (nao marca outro pino em cima).
     m.on('click', function (e) { L.DomEvent.stopPropagation(e); });
@@ -1116,7 +1116,7 @@
       var el = m.getElement();
       if (el) el.classList.remove('arrastando');
       if (!estado.ponto) return;
-      renderizarPerto();
+      renderizarPerto(true);
       agendarLink();
     });
   }
@@ -1213,8 +1213,12 @@
     agendarLink();
   }
 
-  function renderizarPerto() {
+  // `continuo`: o redesenho vem de um gesto que se repete (arrastar o pino,
+  // correr o raio). Sem a animacao de entrada, porque ela recomecaria a cada
+  // quadro e a tabela ficaria apagada enquanto o gesto dura.
+  function renderizarPerto(continuo) {
     if (!estado.ponto) return;
+    $('#secao-perto').classList.toggle('sem-animacao', !!continuo);
     var P = estado.ponto;
     var alcance = Math.max(ALCANCE_POR_OPERADORA_KM, estado.raioKm);
     var res = proximasDoPonto(P.lat, P.lon, alcance, estado.raioKm);
@@ -1682,7 +1686,7 @@
       agendarLink();
       $('#raio-valor').textContent = this.value + ' km';
       desenharRaio();
-      renderizarPerto();
+      renderizarPerto(true);
     });
     $('#perto-fechar').addEventListener('click', fecharPerto);
     $('#perto-endereco').addEventListener('click', enderecoDoPino);
