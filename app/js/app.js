@@ -582,13 +582,31 @@
       interactive: false, keyboard: false
     });
 
+    // Clique esquerdo (10/11/2026): na antena abre a ficha; com a ficha
+    // aberta, clicar fora so fecha a ficha (senao o pino pularia toda vez que
+    // alguem fecha uma ficha); no vazio, marca o pino.
+    //
+    // Arrastar o mapa nao marca nada: o Leaflet nao solta 'click' depois de
+    // um arraste. O duplo clique (zoom) solta dois 'click' antes do
+    // 'dblclick', por isso o pino espera um instante e e cancelado se vier
+    // o segundo clique ou o zoom.
+    var timerPino = null;
+    function cancelarPino() { if (timerPino) { clearTimeout(timerPino); timerPino = null; } }
     mapa.on('click', function (e) {
       var i = camadaAntenas.maisProximo(e.containerPoint, 12);
-      if (i >= 0) selecionar(i);
-      else fecharFicha();
+      if (i >= 0) { cancelarPino(); selecionar(i); return; }
+      if (estado.selecionado >= 0) { cancelarPino(); fecharFicha(); return; }
+      if (timerPino) { cancelarPino(); return; } // segundo clique de um duplo
+      var ll = e.latlng;
+      timerPino = setTimeout(function () {
+        timerPino = null;
+        buscarPerto(ll.lat, ll.lng, false);
+      }, 280);
     });
-    // Botao direito (ou toque longo no celular): "o que tem de antena aqui?"
+    mapa.on('dblclick zoomstart movestart', cancelarPino);
+    // Botao direito (ou toque longo no celular): o mesmo pino, na hora.
     mapa.on('contextmenu', function (e) {
+      cancelarPino();
       buscarPerto(e.latlng.lat, e.latlng.lng, false);
     });
     ligarPassarMouse();
@@ -1032,15 +1050,31 @@
 
   // `origem` ({rotulo, precisao}) so vem da busca por CEP/endereco. Fica na
   // memoria para o cabecalho; o link da vista leva so a coordenada.
+  //
+  // O pino e arrastavel (10/11/2026): a busca por CEP cai na rua, e arrastar
+  // ate a casa certa olhando o mapa corrige isso sem outro servico. Durante o
+  // arraste o raio, a tabela e os feixes acompanham (uma conta por quadro); ao
+  // soltar, o link da vista e atualizado. O pino tem 40 px de area de toque
+  // para o dedo pegar ele, e nao o mapa.
   function buscarPerto(lat, lon, centralizar, origem) {
-    estado.ponto = { lat: lat, lon: lon, rotulo: origem && origem.rotulo, precisao: origem && origem.precisao };
+    estado.ponto = {
+      lat: lat, lon: lon, rotulo: origem && origem.rotulo, precisao: origem && origem.precisao,
+      ajustado: false, reverso: null, versao: 0
+    };
     if (marcadorPonto) mapa.removeLayer(marcadorPonto);
     marcadorPonto = L.marker([lat, lon], {
-      icon: L.divIcon({ className: '', html: '<div class="alvo-busca"><span class="radar"></span></div>', iconSize: [0, 0] }),
-      interactive: false,
+      icon: L.divIcon({
+        className: 'pino-arrastavel',
+        html: '<div class="alvo-busca"><span class="radar"></span></div>',
+        iconSize: [40, 40], iconAnchor: [20, 20]
+      }),
+      draggable: true,
+      autoPan: true,
       keyboard: false,
+      title: 'Arraste para ajustar o ponto',
       zIndexOffset: 400
     }).addTo(mapa);
+    ligarArrastePino(marcadorPonto);
     desenharRaio();
     if (centralizar) voarParaArea(circuloRaio.getBounds(), { maxZoom: 15 });
     renderizarPerto();
@@ -1050,6 +1084,100 @@
     if (window.matchMedia && window.matchMedia('(max-width: 780px)').matches) {
       document.body.classList.add('painel-aberto');
     }
+  }
+
+  function ligarArrastePino(m) {
+    var agendado = false;
+    function quadro() {
+      agendado = false;
+      if (estado.ponto) renderizarPerto();
+    }
+    // Clique no proprio pino nao chega ao mapa (nao marca outro pino em cima).
+    m.on('click', function (e) { L.DomEvent.stopPropagation(e); });
+    m.on('dragstart', function () {
+      var el = m.getElement();
+      if (el) el.classList.add('arrastando');
+      // "Endereco encontrado. Posicao pela rua" deixa de valer ao arrastar.
+      aviso('');
+    });
+    m.on('drag', function () {
+      if (!estado.ponto) return;
+      var ll = m.getLatLng();
+      estado.ponto.lat = ll.lat;
+      estado.ponto.lon = ll.lng;
+      estado.ponto.ajustado = true;
+      // O endereco achado antes (se houver) ja nao e deste lugar.
+      estado.ponto.reverso = null;
+      estado.ponto.versao++;
+      if (circuloRaio) circuloRaio.setLatLng(ll);
+      if (!agendado) { agendado = true; L.Util.requestAnimFrame(quadro); }
+    });
+    m.on('dragend', function () {
+      var el = m.getElement();
+      if (el) el.classList.remove('arrastando');
+      if (!estado.ponto) return;
+      renderizarPerto();
+      agendarLink();
+    });
+  }
+
+  // "Qual o endereco deste ponto?": so aqui a coordenada do pino sai do
+  // navegador (Nominatim reverse), e so porque a pessoa clicou.
+  function enderecoDoPino() {
+    var P = estado.ponto;
+    if (!P) return;
+    if (!geocodificador) { P.reverso = { erro: 'Este navegador nao consegue consultar endereco.' }; renderizarCabecaPerto(); return; }
+    var versao = P.versao;
+    P.reverso = { buscando: true };
+    renderizarCabecaPerto();
+    geocodificador.buscarReverso(P.lat, P.lon).then(function (r) {
+      if (estado.ponto !== P || P.versao !== versao) return; // o pino mudou
+      P.reverso = r;
+      renderizarCabecaPerto();
+    }, function (e) {
+      if (estado.ponto !== P || P.versao !== versao) return;
+      P.reverso = {
+        erro: e && e.tipo === 'rede'
+          ? 'Nao consegui consultar agora (' + e.message + ') Tente de novo em instantes.'
+          : (e && e.message) || 'Falha ao consultar o endereco.'
+      };
+      renderizarCabecaPerto();
+    });
+  }
+
+  // Cabecalho do quadro "Antenas perto do ponto": de onde veio o ponto, a
+  // coordenada, a precisao e o endereco do pino (quando pedido).
+  function renderizarCabecaPerto() {
+    var P = estado.ponto;
+    if (!P) return;
+    var coordP = '<code>' + P.lat.toFixed(5) + ', ' + P.lon.toFixed(5) + '</code>';
+    var h;
+    if (P.rotulo && !P.ajustado) {
+      h = '<strong>' + esc(P.rotulo) + '</strong><br>' + coordP +
+        ' <span class="sub">posicao ' + esc(Endereco.TEXTO_PRECISAO[P.precisao] || '') + '</span>';
+    } else if (P.rotulo) {
+      h = '<strong>Ponto ajustado a mao</strong><br>' + coordP +
+        '<br><span class="sub">partiu de ' + esc(P.rotulo) + '</span>';
+    } else {
+      h = 'Ponto ' + coordP;
+    }
+    var R = P.reverso;
+    if (R && R.buscando) {
+      h += '<div class="perto-endereco">Procurando o endereco...</div>';
+    } else if (R && R.erro) {
+      h += '<div class="perto-endereco erro">' + esc(R.erro) + '</div>';
+    } else if (R && R.rotulo) {
+      var longe = R.distanciaM != null && R.distanciaM > 60;
+      h += '<div class="perto-endereco"><span class="sub">Endereco aproximado (OpenStreetMap)</span><br><strong>' +
+        esc(R.rotulo) + '</strong>' +
+        (longe ? '<br><span class="sub">o lugar achado fica a ' + Geo.formatarDistancia(R.distanciaM / 1000) +
+          ' do pino</span>' : '') + '</div>';
+    }
+    $('#perto-cabeca').innerHTML = h;
+    // O botao some quando o ponto ja tem endereco valido (da busca, sem
+    // arraste, ou o reverso ja achado) e enquanto a consulta esta em curso.
+    var temEndereco = (P.rotulo && !P.ajustado) || (R && (R.rotulo || R.buscando));
+    $('#perto-endereco').hidden = !!temEndereco;
   }
 
   function desenharRaio() {
@@ -1093,11 +1221,7 @@
     var noRaio = res.noRaio;
     var melhorOp = res.melhorOp;
 
-    var coordP = '<code>' + P.lat.toFixed(5) + ', ' + P.lon.toFixed(5) + '</code>';
-    $('#perto-cabeca').innerHTML = P.rotulo
-      ? '<strong>' + esc(P.rotulo) + '</strong><br>' + coordP +
-        ' <span class="sub">posicao ' + esc(Endereco.TEXTO_PRECISAO[P.precisao] || '') + '</span>'
-      : 'Ponto ' + coordP;
+    renderizarCabecaPerto();
 
     var h = '';
     for (var k = 0; k < ANT_OPERADORAS.length; k++) {
@@ -1561,6 +1685,7 @@
       renderizarPerto();
     });
     $('#perto-fechar').addEventListener('click', fecharPerto);
+    $('#perto-endereco').addEventListener('click', enderecoDoPino);
     $('#copiar-link').addEventListener('click', copiarLink);
 
     $('#cobertura-opacidade').addEventListener('input', function () {

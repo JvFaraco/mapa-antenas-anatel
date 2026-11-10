@@ -340,6 +340,18 @@ select.campo option { background: var(--card); color: var(--text); }
 .msg.erro { color: var(--cor-vermelho); font-weight: 600; }
 #perto-cabeca strong { color: var(--text); }
 #perto-cabeca .sub { font-size: 11.5px; }
+#perto-cabeca .perto-endereco { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+#perto-cabeca .perto-endereco.erro { color: var(--cor-vermelho); font-weight: 600; }
+#perto-endereco { flex: 1; font-size: 12.5px; padding-top: 7px; padding-bottom: 7px; }
+
+/* Pino da busca: 40 px de area de toque em volta do alvo de 16 px, para o
+   dedo pegar o pino e nao o mapa. Arrastando, o radar some e o alvo cresce. */
+.pino-arrastavel { display: flex; align-items: center; justify-content: center; cursor: grab; background: none; border: 0; }
+.pino-arrastavel .alvo-busca { margin: 0; }
+.pino-arrastavel.arrastando { cursor: grabbing; }
+.pino-arrastavel.arrastando .radar { display: none; }
+/* animation: none porque o "cravar" (fill both) prenderia o transform. */
+.pino-arrastavel.arrastando .alvo-busca { animation: none; transform: scale(1.25); }
 .msg code, .ficha-linha code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
 
 /* --------------------------------------------------------------- CHIPS
@@ -807,15 +819,17 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid
       </div>
       <div id="erro" class="msg" role="status" aria-live="polite"></div>
       <div id="lista" class="lista lista-rolagem" hidden></div>
-      <div class="nota">Endereco, CEP ou coordenada: lista as antenas em volta. O botao
-        direito no mapa faz o mesmo num ponto qualquer. CEP e endereco sao consultados no
-        ViaCEP e no OpenStreetMap e caem na rua, nao no numero; a coordenada e mais exata
-        e nao sai do navegador.</div>
+      <div class="nota">Endereco, CEP ou coordenada: lista as antenas em volta. Um clique
+        no mapa marca um pino num ponto qualquer, e o pino pode ser arrastado. CEP e
+        endereco sao consultados no ViaCEP e no OpenStreetMap e caem na rua, nao no numero:
+        arraste o pino ate a casa certa. Coordenada e pino nao saem do navegador.</div>
     </div>
 
     <div class="secao" id="secao-perto" hidden>
       <h2>Antenas perto do ponto</h2>
       <div id="perto-cabeca" class="msg" style="margin-top:0"></div>
+      <div class="botoes"><button id="perto-endereco" type="button" hidden
+        title="Consulta o OpenStreetMap com a coordenada do pino">Qual o endereco deste ponto?</button></div>
       <div class="deslizante">
         <label>Raio <strong id="raio-valor">5 km</strong></label>
         <input id="raio" type="range" min="1" max="30" value="5" step="1" aria-label="Raio da busca">

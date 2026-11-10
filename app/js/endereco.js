@@ -12,6 +12,11 @@
 // poucos numeros de casa no Brasil. Por isso cada resultado diz a precisao
 // ('imovel', 'rua', 'bairro' ou 'cidade') e o app mostra isso na tela.
 //
+// O caminho inverso (coordenada do pino -> endereco, `buscarReverso`) tambem
+// vai ao Nominatim, mas so quando a pessoa clica em "Qual o endereco deste
+// ponto?". Clicar, arrastar o pino ou colar uma coordenada nao manda nada:
+// a posicao de um cliente so sai do navegador quando alguem pede.
+//
 // O modulo nao toca no DOM: recebe o fetch por parametro, e o
 // tests/geo_test.cjs roda tudo sem rede.
 
@@ -20,6 +25,7 @@
 
   const URL_VIACEP = 'https://viacep.com.br/ws/';
   const URL_NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+  const URL_NOMINATIM_REVERSO = 'https://nominatim.openstreetmap.org/reverse';
   // A politica do Nominatim pede no maximo 1 pedido por segundo.
   const INTERVALO_NOMINATIM_MS = 1100;
   const TEMPO_LIMITE_MS = 12000;
@@ -130,10 +136,15 @@
       catch (e) { throw erro('rede', new URL(url).host + ' devolveu algo que nao e JSON.'); }
     }
 
-    async function nominatim(params) {
+    // Busca e reverso dividem o mesmo limite de 1 pedido por segundo.
+    async function vezDoNominatim() {
       const falta = ultimoNominatim + INTERVALO_NOMINATIM_MS - agora();
       if (falta > 0) await esperar(falta);
       ultimoNominatim = agora();
+    }
+
+    async function nominatim(params) {
+      await vezDoNominatim();
       const q = new URLSearchParams(Object.assign({
         format: 'jsonv2', addressdetails: '1', countrycodes: 'br',
         limit: String(MAX_RESULTADOS), 'accept-language': 'pt-BR'
@@ -199,14 +210,36 @@
       throw erro('nada', 'O CEP ' + formatarCep(c) + ' existe (' + fim + '), mas o OpenStreetMap nao achou o lugar.');
     }
 
-    return { buscarCep, buscarTexto };
+    // Coordenada -> o endereco mais proximo que o OpenStreetMap conhece. O
+    // `distanciaM` diz quao longe do pino fica o que ele achou: numa area rural
+    // o "endereco" pode ser a estrada a 800 m, e a tela precisa dizer isso.
+    async function buscarReverso(lat, lon) {
+      if (!isFinite(lat) || !isFinite(lon)) throw erro('nada', 'Coordenada invalida.');
+      await vezDoNominatim();
+      const q = new URLSearchParams({
+        format: 'jsonv2', addressdetails: '1', zoom: '18', 'accept-language': 'pt-BR',
+        lat: (+lat).toFixed(6), lon: (+lon).toFixed(6)
+      });
+      const r = await pedirJson(URL_NOMINATIM_REVERSO + '?' + q.toString());
+      if (!r || r.error || !r.address) throw erro('nada', 'O OpenStreetMap nao tem endereco para este ponto.');
+      if (r.address.country_code && r.address.country_code !== 'br') {
+        throw erro('nada', 'Este ponto fica fora do Brasil.');
+      }
+      const la = +r.lat, lo = +r.lon;
+      const distanciaM = isFinite(la) && isFinite(lo) && raiz.Geo && raiz.Geo.distanciaKm
+        ? Math.round(raiz.Geo.distanciaKm(lat, lon, la, lo) * 1000) : null;
+      return { rotulo: rotuloDe(r), precisao: precisaoDe(r), distanciaM };
+    }
+
+    return { buscarCep, buscarTexto, buscarReverso };
   }
 
   const TEXTO_PRECISAO = {
     imovel: 'no numero',
     rua: 'pela rua, nao pelo numero',
     bairro: 'pelo bairro, aproximada',
-    cidade: 'pelo centro do municipio, bem aproximada'
+    cidade: 'pelo centro do municipio, bem aproximada',
+    manual: 'ajustada a mao no mapa'
   };
 
   // Para a lista de escolha, onde o espaco e curto.

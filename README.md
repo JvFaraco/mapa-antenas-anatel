@@ -85,7 +85,7 @@ para a busca por CEP ou endereço. As antenas estão dentro do arquivo.
 
 | Quero… | Como |
 |---|---|
-| Antenas perto de um endereço | Digite o endereço (`Rua Felipe Schmidt, 300, Florianópolis`), o CEP (`88015-200`) ou a coordenada (`-27.5954, -48.5480`), ou clique com o **botão direito** no mapa |
+| Antenas perto de um endereço | Digite o endereço (`Rua Felipe Schmidt, 300, Florianópolis`), o CEP (`88015-200`) ou a coordenada (`-27.5954, -48.5480`), ou **clique no mapa** para marcar um pino |
 | Só onde tem 3G (voz) | *Gerações* → deixe só o **3G** marcado |
 | Ir para uma cidade | Digite o município (`Joinville`, ou `Bom Jesus/SC` quando o nome se repete) |
 | Achar uma ERB pelo número | Digite o nº da estação (o mesmo da Anatel) |
@@ -111,6 +111,29 @@ mesmo ponto** (torre compartilhada).
 A busca por ponto respeita os filtros: com só o 3G marcado, "a mais próxima da
 TIM" é a mais próxima **com 3G**.
 
+### O pino
+
+**Um clique** num lugar vazio do mapa marca um pino ali, com as antenas em
+volta. O botão direito (ou segurar o dedo, no celular) faz o mesmo. O pino é
+um só: um clique em outro lugar move ele para lá. Para não atrapalhar o manuseio:
+
+- **arrastar o mapa** continua só arrastando, sem marcar nada;
+- **duplo clique** continua dando zoom, sem marcar;
+- **clique numa antena** abre a ficha. Com a ficha aberta, o primeiro clique
+  fora só fecha a ficha, e o pino fica onde estava.
+
+**O pino pode ser arrastado.** A tabela da mais próxima de cada operadora, o
+raio e os feixes acompanham enquanto ele anda, e o link da vista é atualizado
+quando você solta. É a forma de corrigir a busca por CEP ou endereço, que cai
+na rua: busque, arraste o pino até a casa certa olhando o mapa, e o quadro passa
+a dizer "Ponto ajustado à mão" e de onde ele partiu.
+
+**"Qual o endereço deste ponto?"** é o botão no quadro do pino. Ele mostra o
+endereço mais próximo que o OpenStreetMap conhece e a que distância do pino ele
+fica. Numa área rural, esse endereço pode ser uma estrada a 1 km. A coordenada
+do pino só vai para o OpenStreetMap quando alguém clica nesse botão. Marcar,
+mover ou arrastar o pino não manda nada.
+
 ### CEP e endereço
 
 A busca também aceita **CEP** (`88015-200` ou `88015200`) e **endereço escrito**
@@ -128,10 +151,12 @@ Limites que valem saber:
 - **A posição é da rua, não do número.** O OpenStreetMap tem poucos números de
   casa no Brasil, e o CEP aponta para a rua (ou o trecho dela). O mapa diz a
   precisão de cada resultado: no número, pela rua, pelo bairro ou pelo centro
-  do município. Para a antena mais próxima "na porta", use a coordenada.
+  do município. Para a antena mais próxima "na porta", arraste o pino até a casa
+  ou use a coordenada.
 - **Isto sai do navegador.** O texto do CEP ou do endereço vai para esses
-  serviços, e só quando você clica em Buscar. Coordenada, município e número de
-  ERB continuam sem sair. O link da vista guarda só a coordenada achada.
+  serviços, e só quando você clica em Buscar. Coordenada, município, número de
+  ERB e pino continuam sem sair (o pino só sai no botão "Qual o endereço deste
+  ponto?"). O link da vista guarda só a coordenada.
 - **O lote não usa isto.** O lote de pontos continua só com coordenadas: mandar
   uma carteira de endereços para fora vazaria dado de cliente, e a política do
   Nominatim proíbe uso em lote.
@@ -250,7 +275,7 @@ ferramentas/gerar.py        orquestra: consolida, monta o HTML, a planilha e o r
 app/modelo.html             a casca + todo o CSS (paleta propria; escuro e o padrao)
 app/js/app.js               o aplicativo (canvas, filtros, busca, ficha, resumo, animacoes)
 app/js/cobertura.js         a mancha das operadoras (veio do mapa original, igual)
-app/js/endereco.js          busca por CEP (ViaCEP) e endereço (Nominatim), com a precisão
+app/js/endereco.js          busca por CEP (ViaCEP), endereço e endereço do pino (Nominatim), com a precisão
                             de cada resultado (10/11/2026)
 app/js/geo.js               distâncias e janela de busca (do mapa original) + índice em
                             grade e leitura do lote (10/11/2026)

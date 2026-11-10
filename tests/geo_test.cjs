@@ -272,6 +272,34 @@ casoAsync('endereco: no maximo 1 pedido por segundo ao Nominatim', async () => {
   assert.ok(esperas.every((ms) => ms >= 1000), String(esperas));
 });
 
+casoAsync('endereco do pino: reverso devolve rotulo, precisao e distancia', async () => {
+  const { g, pedidos } = geocod([[(u) => u.includes('/reverse?'), nominatimItem({
+    lat: '-27.5925', lon: '-48.5480', place_rank: 30, address: Object.assign({ house_number: '532', country_code: 'br' }, RUA_FLORIPA)
+  })]]);
+  const r = await g.buscarReverso(-27.5920, -48.5480);
+  assert.strictEqual(r.rotulo, 'Avenida Rio Branco, 532, Centro, Florianópolis/SC');
+  assert.strictEqual(r.precisao, 'imovel');
+  assert.ok(r.distanciaM >= 50 && r.distanciaM <= 60, String(r.distanciaM)); // 0,0005 grau de latitude ~ 56 m
+  const u = new URL(pedidos[0]);
+  assert.strictEqual(u.searchParams.get('lat'), '-27.592000');
+  assert.strictEqual(u.searchParams.get('lon'), '-48.548000');
+});
+
+casoAsync('endereco do pino: sem endereco no OSM e fora do Brasil viram erro "nada"', async () => {
+  const vazio = geocod([[(u) => u.includes('/reverse?'), { error: 'Unable to geocode' }]]);
+  await assert.rejects(vazio.g.buscarReverso(-10, -50), (e) => e.tipo === 'nada');
+  const fora = geocod([[(u) => u.includes('/reverse?'), nominatimItem({ address: { road: 'Ruta 3', country_code: 'ar' } })]]);
+  await assert.rejects(fora.g.buscarReverso(-30, -58), (e) => e.tipo === 'nada' && e.message.includes('fora do Brasil'));
+});
+
+casoAsync('endereco do pino: busca e reverso dividem o limite de 1 pedido/s', async () => {
+  const { g, esperas } = geocod([[(u) => u.includes('/reverse?'), nominatimItem({ address: RUA_FLORIPA })]]);
+  await g.buscarTexto('Rua X, Joinville');
+  await g.buscarReverso(-27.59, -48.55);
+  assert.strictEqual(esperas.length, 1);
+  assert.ok(esperas[0] >= 1000, String(esperas));
+});
+
 filaAsync.then(() => {
   if (falhas) { console.log(falhas + ' falha(s)'); process.exit(1); }
   console.log('todos ok');
