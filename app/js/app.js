@@ -1708,6 +1708,54 @@
       document.body.classList.toggle('painel-aberto');
       setTimeout(function () { mapa.invalidateSize(); }, 210);
     });
+    $('#recolher-painel').addEventListener('click', alternarPainelLateral);
+  }
+
+  // ------------------------------------------- 10a. MENU LATERAL RECOLHIVEL
+  // O botao do cabecalho esconde o painel para o mapa ocupar a tela toda (no
+  // computador; no celular o painel ja abre fechado, com o botao Filtros).
+  // Enquanto desliza, o painel flutua por cima do mapa e so o transform anima.
+  // O mapa muda de tamanho de uma vez: ao recolher, logo no clique (o painel
+  // ainda cobre a faixa nova); ao abrir, so no fim (o painel ja cobre a faixa
+  // que sai). Nos dois casos ajustarMapaAoPalco desloca o mapa pelo quanto a
+  // borda andou, e cada lugar fica no mesmo ponto da tela, sem pulo.
+  // A busca por ponto com o painel recolhido nao o abre: o pino, o raio e os
+  // feixes ja respondem no mapa, e quem recolheu pediu o mapa inteiro.
+  var DURACAO_PAINEL_MS = 300; // o mesmo .3s do #painel no modelo.html
+  var timerPainel = null;
+
+  function alternarPainelLateral() {
+    var corpo = document.body;
+    var palco = $('#palco');
+    var recolher = !corpo.classList.contains('painel-recolhido');
+    clearTimeout(timerPainel);
+    if (recolher) {
+      var antes = palco.getBoundingClientRect().left;
+      corpo.classList.remove('painel-abrindo');
+      corpo.classList.add('painel-recolhido');
+      ajustarMapaAoPalco(antes);
+    } else {
+      corpo.classList.add('painel-abrindo');
+      corpo.classList.remove('painel-recolhido');
+      timerPainel = setTimeout(function () {
+        var noFim = palco.getBoundingClientRect().left;
+        corpo.classList.remove('painel-abrindo');
+        ajustarMapaAoPalco(noFim);
+      }, MENOS_MOVIMENTO ? 0 : DURACAO_PAINEL_MS);
+    }
+    var b = $('#recolher-painel');
+    var rotulo = recolher ? 'Mostrar o menu lateral' : 'Esconder o menu lateral';
+    b.setAttribute('aria-expanded', String(!recolher));
+    b.setAttribute('aria-label', rotulo);
+    b.title = recolher ? rotulo : rotulo + ' (mapa em tela cheia)';
+  }
+
+  // A borda esquerda do mapa andou d px: sem correcao, o desenho andaria junto.
+  // panBy(d) desloca o desenho -d e devolve cada lugar ao ponto da tela.
+  function ajustarMapaAoPalco(esquerdaAntes) {
+    var d = Math.round($('#palco').getBoundingClientRect().left - esquerdaAntes);
+    mapa.invalidateSize({ pan: false });
+    if (d) mapa.panBy([d, 0], { animate: false });
   }
 
   // ------------------------------------------- 10b. LINK DA VISTA (M12)

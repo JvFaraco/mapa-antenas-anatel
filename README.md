@@ -92,6 +92,7 @@ para a busca por CEP ou endereço. As antenas estão dentro do arquivo.
 | Ver só um estado | *Estado (UF)* |
 | Comparar com o que a operadora promete | *Mancha de cobertura* (Claro, TIM, Vivo) |
 | Ver a geração das torres | *Colorir por* → **Geração mais alta** |
+| Ver o mapa na tela toda | Botão à esquerda do título: esconde o menu lateral, e o mesmo botão traz de volta. No celular o menu já abre fechado (botão *Filtros*) |
 
 Passe o mouse sobre uma antena para ver a operadora e as gerações sem
 clicar. A barra no canto inferior esquerdo mostra quantas ERBs estão na tela,
